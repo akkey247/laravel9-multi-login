@@ -1,0 +1,122 @@
+#!/bin/bash
+
+# Laravel Install
+laravel_install () {
+    composer create-project --prefer-dist laravel/laravel=9.* .
+    sed -i'' -e "s/\(DB_CONNECTION=\).*/\1mysql/" .env
+    sed -i'' -e "s/\(DB_HOST=\).*/\1db/" .env
+    sed -i'' -e "s/\(DB_PORT=\).*/\13306/" .env
+    sed -i'' -e "s/\(DB_DATABASE=\).*/\1laravel/" .env
+    sed -i'' -e "s/\(DB_USERNAME=\).*/\1laravel-user/" .env
+    sed -i'' -e "s/\(DB_PASSWORD=\).*/\1laravel-pass/" .env
+    php artisan migrate
+}
+
+# Laravel UI Install
+laravel_ui_install () {
+    ui_type=$1
+    ui_auth=$2
+    composer require laravel/ui
+    php artisan ui ${ui_type} ${ui_auth}
+    npm install
+    npm install resolve-url-loader@^5.0.0 --save-dev --legacy-peer-deps
+    npm run dev
+}
+
+# Laravel Breeze Install
+laravel_breeze_install () {
+    breeze_type=$1
+    composer require laravel/breeze --dev
+    php artisan breeze:install ${breeze_type}
+    npm install
+    npm run dev
+}
+
+# Help
+usage () {
+  cat << EOM
+Usage: $(basename "$0") [OPTION]...
+      --ui=TYPE         install laravel-ui
+      --uiauth          add auth option for laravel-ui
+      --breeze          install laravel-breeze
+      --breeze=TYPE     install laravel-breeze
+  -h, --help            display this help and exit
+  -v, --version         output version information and exit
+EOM
+}
+
+# Version
+version () {
+    echo 'v1.0.0'
+}
+
+cd /var/www
+
+use_ui=false
+use_breeze=false
+
+while getopts h-:v-: opt; do
+    optarg="$OPTARG"
+    if [ "$opt" = - ]; then
+        opt="-${OPTARG%%=*}"
+        optarg="${OPTARG/${OPTARG%%=*}/}"
+        optarg="${optarg#=}"
+
+        if [ -z "$optarg" ] && [ ! "${!OPTIND}" = -* ]; then
+            optarg="${!OPTIND}"
+            shift
+        fi
+    fi
+
+    case "-$opt" in
+        --ui)
+            use_ui=true
+            ui_type=''
+            if [ "${optarg}" == 'bootstrap' ] \
+                || [ "${optarg}" == 'vue' ] \
+                || [ "${optarg}" == 'react' ] \
+            ; then
+                ui_type="$optarg"
+            fi
+            ;;
+        --uiauth)
+            ui_auth='--auth'
+            ;;
+        --breeze)
+            use_breeze=true
+            breeze_type=''
+            if [ "${optarg}" == 'vue' ] \
+                || [ "${optarg}" == 'react' ] \
+            ; then
+                breeze_type="$optarg"
+            fi
+            ;;
+        -h|--help)
+            usage
+            exit
+            ;;
+        -v|--version)
+            version
+            exit
+            ;;
+        --)
+            break
+            ;;
+        -\?)
+            usage
+            exit 1
+            ;;
+        --*)
+            echo "$0: illegal option -- ${opt##-}"
+            usage
+            exit 1
+            ;;
+    esac
+done
+
+laravel_install
+if "${use_ui}"; then
+    laravel_ui_install ${ui_type} ${ui_auth}
+elif "${use_breeze}"; then
+    laravel_breeze_install ${breeze_type}
+fi
